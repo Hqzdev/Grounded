@@ -1,0 +1,155 @@
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: apps/gateway/Dockerfile
+    environment:
+      AUTH_SERVICE_URL: http://auth:8000
+      INGESTION_SERVICE_URL: http://ingestion:8000
+      RETRIEVAL_SERVICE_URL: http://retrieval:8000
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth
+      - ingestion
+      - retrieval
+
+  auth:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: services/auth
+    environment:
+      DATABASE_URL: postgresql://grounded:grounded@postgres:5432/grounded
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-only-change-me
+      JWT_ISSUER: grounded-auth
+      JWT_AUDIENCE: grounded-web
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  ingestion:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: services/ingestion
+    environment:
+      DATABASE_URL: postgresql://grounded:grounded@postgres:5432/grounded
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: grounded
+      MINIO_ROOT_PASSWORD: groundedsecret
+      QUEUE_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "8002:8000"
+    depends_on:
+      - postgres
+      - minio
+      - rabbitmq
+
+  embedding:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-worker.Dockerfile
+      args:
+        SERVICE_PATH: services/embedding
+    environment:
+      DATABASE_URL: postgresql://grounded:grounded@postgres:5432/grounded
+      QUEUE_URL: amqp://guest:guest@rabbitmq:5672
+      INGESTION_QUEUE: document_ingestion
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: grounded_chunks
+      EMBEDDING_DIMENSIONS: 64
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: grounded
+      MINIO_ROOT_PASSWORD: groundedsecret
+    depends_on:
+      - postgres
+      - minio
+      - rabbitmq
+      - qdrant
+
+  retrieval:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: services/retrieval
+    environment:
+      DATABASE_URL: postgresql://grounded:grounded@postgres:5432/grounded
+      JWT_SECRET: dev-only-change-me
+      JWT_ISSUER: grounded-auth
+      JWT_AUDIENCE: grounded-web
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: grounded_chunks
+      EMBEDDING_DIMENSIONS: 64
+      RETRIEVAL_LIMIT: 5
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8004:8000"
+    depends_on:
+      - postgres
+      - qdrant
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: grounded
+      POSTGRES_USER: grounded
+      POSTGRES_PASSWORD: grounded
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.4
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: grounded
+      MINIO_ROOT_PASSWORD: groundedsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  minio-data:

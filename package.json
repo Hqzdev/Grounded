@@ -1,0 +1,20 @@
+{
+  "name": "grounded",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/database"
+  ],
+  "scripts": {
+    "build:web": "npm --workspace apps/web run build",
+    "db:format": "npm --workspace packages/database run db:format",
+    "db:generate": "npm --workspace packages/database run db:generate",
+    "db:migrate": "npm --workspace packages/database run db:migrate",
+    "db:studio": "npm --workspace packages/database run db:studio",
+    "db:validate": "npm --workspace packages/database run db:validate",
+    "dev:web": "npm --workspace apps/web run dev",
+    "lint:web": "npm --workspace apps/web run lint",
+    "smoke:backend": "bash scripts/smoke-ingestion-retrieval.sh"
+  }
+}
