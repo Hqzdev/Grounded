@@ -1,0 +1,54 @@
+openapi: 3.1.0
+info:
+  title: Grounded Public API
+  version: 0.1.0
+paths:
+  /api/documents:
+    post:
+      summary: Queue a document for ingestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentRequest"
+      responses:
+        "200":
+          description: Queued document
+  /api/questions:
+    post:
+      summary: Ask a tenant-scoped document question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionRequest"
+      responses:
+        "200":
+          description: Answer with citations
+components:
+  schemas:
+    DocumentRequest:
+      type: object
+      required:
+        - tenant_id
+        - filename
+        - content_type
+      properties:
+        tenant_id:
+          type: string
+        filename:
+          type: string
+        content_type:
+          type: string
+    QuestionRequest:
+      type: object
+      required:
+        - tenant_id
+        - question
+      properties:
+        tenant_id:
+          type: string
+        question:
+          type: string
