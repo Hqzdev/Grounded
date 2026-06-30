@@ -8,6 +8,12 @@
   ],
   "scripts": {
     "build:web": "npm --workspace apps/web run build",
+    "check": "npm run check:database && npm run check:backend && npm run check:web",
+    "check:backend": "npm run check:python && npm run check:gateway",
+    "check:database": "npm run db:validate && npm run db:generate",
+    "check:gateway": "cargo check --manifest-path apps/gateway/Cargo.toml",
+    "check:python": "PYTHONPYCACHEPREFIX=.cache/python python3 -m compileall services/auth/app services/embedding/app services/ingestion/app services/retrieval/app",
+    "check:web": "npm run lint:web && npm run build:web",
     "db:format": "npm --workspace packages/database run db:format",
     "db:generate": "npm --workspace packages/database run db:generate",
     "db:migrate": "npm --workspace packages/database run db:migrate",
