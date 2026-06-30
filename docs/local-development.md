@@ -77,13 +77,26 @@ The local Docker Compose pipeline shall work before Kubernetes, Terraform, GitOp
 
 ## 6. Startup Procedure
 
-The local environment shall start through Docker Compose.
+The default development command shall start the backend services, wait for the gateway, apply Prisma migrations, and start the Next.js development server.
+
+```bash
+npm run dev
+```
+
+Backend services may be started and stopped separately.
+
+```bash
+npm run dev:backend
+npm run dev:backend:down
+```
+
+The local environment may also start directly through Docker Compose.
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml up --build
 ```
 
-This command is the expected first operational path for a new developer.
+`npm run dev` is the expected first operational path for a new developer working on the web application and backend integration together.
 
 ## 7. Database Procedure
 
