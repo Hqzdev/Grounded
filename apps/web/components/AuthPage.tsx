@@ -1,12 +1,76 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { Logo } from "@/components/Chrome";
+import { ApiError, AuthResponse, login, register, verifyEmail } from "@/lib/api";
 
 type AuthPageProps = {
   mode: "login" | "register";
 };
 
+type AuthStatus = {
+  tone: "success" | "error";
+  message: string;
+};
+
+const authStorageKey = "grounded.auth";
+
 export function AuthPage({ mode }: AuthPageProps) {
+  const router = useRouter();
   const isRegister = mode === "register";
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus(null);
+    setIsSubmitting(true);
+
+    const form = new FormData(event.currentTarget);
+    const email = getFormValue(form, "email");
+    const password = getFormValue(form, "password");
+
+    try {
+      if (isRegister) {
+        const name = getFormValue(form, "name");
+        const tenantName = getFormValue(form, "organization");
+        const registration = await register({
+          email,
+          password,
+          name,
+          tenant_name: tenantName
+        });
+
+        if (!registration.dev_verification_token) {
+          setStatus({
+            tone: "success",
+            message: "Workspace created. Check your email to verify the account before logging in."
+          });
+          return;
+        }
+
+        await verifyEmail(registration.dev_verification_token);
+      }
+
+      const session = await login({
+        email,
+        password,
+        device_label: navigator.userAgent
+      });
+
+      storeSession(session);
+      router.push("/app");
+    } catch (error) {
+      setStatus({
+        tone: "error",
+        message: resolveAuthError(error)
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <main className="auth-page">
@@ -33,7 +97,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         </div>
       </section>
       <section className="auth-form-wrap">
-        <form className="auth-card">
+        <form className="auth-card" onSubmit={handleSubmit}>
           <p className="eyebrow">{isRegister ? "Create workspace" : "Welcome back"}</p>
           <h2 style={{ fontSize: 34, letterSpacing: "-0.03em", margin: "0 0 6px" }}>{isRegister ? "Start with your team." : "Log in to Grounded."}</h2>
           <p style={{ color: "var(--muted)", margin: "0 0 20px" }}>
@@ -43,29 +107,30 @@ export function AuthPage({ mode }: AuthPageProps) {
             <>
               <div className="field">
                 <label htmlFor="name">Full name</label>
-                <input id="name" name="name" placeholder="Ada Lovelace" />
+                <input autoComplete="name" id="name" name="name" placeholder="Ada Lovelace" required />
               </div>
               <div className="field">
                 <label htmlFor="organization">Organization</label>
-                <input id="organization" name="organization" placeholder="Northwind Legal" />
+                <input autoComplete="organization" id="organization" name="organization" placeholder="Northwind Legal" required />
               </div>
             </>
           ) : null}
           <div className="field">
             <label htmlFor="email">Work email</label>
-            <input id="email" name="email" placeholder="you@company.com" type="email" />
+            <input autoComplete="email" id="email" name="email" placeholder="you@company.com" required type="email" />
           </div>
           <div className="field">
             <label htmlFor="password">Password</label>
-            <input id="password" name="password" placeholder="••••••••••" type="password" />
+            <input autoComplete={isRegister ? "new-password" : "current-password"} id="password" minLength={12} name="password" placeholder="At least 12 characters" required type="password" />
           </div>
-          <button className="btn btn-primary" style={{ marginTop: 20, width: "100%" }} type="button">
-            {isRegister ? "Create workspace" : "Log in"}
+          {status ? (
+            <div className={`auth-message ${status.tone}`} role={status.tone === "error" ? "alert" : "status"}>
+              {status.message}
+            </div>
+          ) : null}
+          <button className="btn btn-primary" disabled={isSubmitting} style={{ marginTop: 20, width: "100%" }} type="submit">
+            {isSubmitting ? "Working..." : isRegister ? "Create workspace" : "Log in"}
           </button>
-          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-            <button className="btn btn-ghost" type="button">Continue with Google</button>
-            <button className="btn btn-ghost" type="button">Continue with GitHub</button>
-          </div>
           <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 18, textAlign: "center" }}>
             {isRegister ? "Already have an account?" : "No workspace yet?"}{" "}
             <Link href={isRegister ? "/login" : "/register"} style={{ color: "#0b7d52", fontWeight: 700 }}>
@@ -76,4 +141,39 @@ export function AuthPage({ mode }: AuthPageProps) {
       </section>
     </main>
   );
+}
+
+function getFormValue(form: FormData, key: string) {
+  const value = form.get(key);
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("Fill in all required fields.");
+  }
+
+  return value.trim();
+}
+
+function storeSession(session: AuthResponse) {
+  localStorage.setItem(
+    authStorageKey,
+    JSON.stringify({
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      expiresIn: session.expires_in,
+      user: session.user,
+      tenant: session.tenant
+    })
+  );
+}
+
+function resolveAuthError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Authentication failed.";
 }
