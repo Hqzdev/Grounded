@@ -1,4 +1,6 @@
-const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080";
+import { ApiError, parseResponse, resolveErrorMessage } from "@/lib/http";
+
+export { ApiError };
 
 export type TenantSummary = {
   id: string;
@@ -14,9 +16,7 @@ export type UserSummary = {
   email_verified: boolean;
 };
 
-export type AuthResponse = {
-  access_token: string;
-  refresh_token: string;
+export type AuthSessionResponse = {
   token_type: string;
   expires_in: number;
   user: UserSummary;
@@ -91,100 +91,66 @@ export type AnswerResponse = {
   created_at: string;
 };
 
-export class ApiError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-export async function getGatewayHealth() {
-  return request("/api/health", { method: "GET" });
-}
-
 export async function register(payload: RegisterRequest) {
-  return request<RegisterResponse>("/api/auth/register", {
+  return request<RegisterResponse>("/api/web/auth/register", {
     method: "POST",
     body: payload
   });
 }
 
 export async function login(payload: LoginRequest) {
-  return request<AuthResponse>("/api/auth/login", {
+  return request<AuthSessionResponse>("/api/web/auth/login", {
     method: "POST",
     body: payload
   });
 }
 
 export async function verifyEmail(token: string) {
-  return request("/api/auth/email/verify", {
+  return request("/api/web/auth/email/verify", {
     method: "POST",
     body: { token }
   });
 }
 
-export async function refresh(refreshToken: string) {
-  return request<AuthResponse>("/api/auth/refresh", {
+export async function logout() {
+  return request("/api/web/auth/logout", {
+    method: "POST"
+  });
+}
+
+export async function getMe() {
+  return request<MeResponse>("/api/web/auth/me", {
+    method: "GET"
+  });
+}
+
+export async function listDocuments() {
+  return request<DocumentSummary[]>("/api/web/documents", {
+    method: "GET"
+  });
+}
+
+export async function askQuestion(payload: QuestionRequest) {
+  return request<AnswerResponse>("/api/web/questions", {
     method: "POST",
-    body: { refresh_token: refreshToken }
+    body: payload
   });
 }
 
-export async function logout(accessToken: string) {
-  return request("/api/auth/logout", {
+export async function queueDocument(payload: DocumentRequest) {
+  return request("/api/web/documents", {
     method: "POST",
-    accessToken
-  });
-}
-
-export async function getMe(accessToken: string) {
-  return request<MeResponse>("/api/auth/me", {
-    method: "GET",
-    accessToken
-  });
-}
-
-export async function listDocuments(accessToken: string) {
-  return request<DocumentSummary[]>("/api/documents", {
-    method: "GET",
-    accessToken
-  });
-}
-
-export async function askQuestion(payload: QuestionRequest, accessToken?: string) {
-  return request<AnswerResponse>("/api/questions", {
-    method: "POST",
-    body: payload,
-    accessToken
-  });
-}
-
-export async function queueDocument(payload: DocumentRequest, accessToken?: string) {
-  return request("/api/documents", {
-    method: "POST",
-    body: payload,
-    accessToken
+    body: payload
   });
 }
 
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
-  const headers = new Headers();
-
-  if (options.body !== undefined) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  if (options.accessToken) {
-    headers.set("Authorization", `Bearer ${options.accessToken}`);
-  }
-
-  const response = await fetch(`${gatewayUrl}${path}`, {
+  const response = await fetch(path, {
     method: options.method,
-    headers,
+    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    cache: "no-store"
+    cache: "no-store",
+    credentials: "same-origin"
   });
 
   const payload = await parseResponse(response);
@@ -196,56 +162,7 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
   return payload as T;
 }
 
-async function parseResponse(response: Response) {
-  const text = await response.text();
-
-  if (!text) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { message: text };
-  }
-}
-
-function resolveErrorMessage(payload: unknown, status: number) {
-  if (isErrorPayload(payload)) {
-    if (typeof payload.detail === "string") {
-      return payload.detail;
-    }
-
-    if (Array.isArray(payload.detail)) {
-      return payload.detail
-        .map((item) => resolveValidationMessage(item))
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    if (typeof payload.message === "string") {
-      return payload.message;
-    }
-  }
-
-  return `Request failed with status ${status}`;
-}
-
-function isErrorPayload(payload: unknown): payload is { detail?: unknown; message?: unknown } {
-  return typeof payload === "object" && payload !== null;
-}
-
-function resolveValidationMessage(item: unknown) {
-  if (typeof item !== "object" || item === null || !("msg" in item)) {
-    return "";
-  }
-
-  const message = (item as { msg?: unknown }).msg;
-  return typeof message === "string" ? message : "";
-}
-
 type RequestOptions = {
   method: "GET" | "POST" | "DELETE";
   body?: unknown;
-  accessToken?: string;
 };

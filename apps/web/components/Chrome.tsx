@@ -55,6 +55,10 @@ export function Footer() {
               {label}
             </Link>
           ))}
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/cookies">Cookies</Link>
+          <Link href="/security">Security</Link>
           <Link href="/login">Log in</Link>
         </div>
         <span className="mono">2026 · self-hostable</span>

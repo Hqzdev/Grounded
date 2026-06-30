@@ -63,6 +63,10 @@ Access tokens are JWTs with `sub`, `tid`, `sid`, `jti`, issuer, audience, issued
 
 Refresh tokens are opaque random values. The database stores only a keyed hash. Refresh tokens rotate on every refresh. A reused, expired, revoked, or already-used refresh token invalidates the whole session family.
 
+The web application shall not expose access tokens or refresh tokens to browser JavaScript. The Next.js web boundary stores tokens in `httpOnly` cookies and proxies browser requests through server-side BFF routes.
+
+Authentication cookies are necessary cookies. They must use `SameSite=Lax`, path `/`, `httpOnly`, and `Secure` in production.
+
 ## 5. Email Verification
 
 Registration creates an unverified user, tenant, owner membership, email verification token, and audit event. Login is denied until email verification completes.
@@ -86,6 +90,21 @@ Users can list sessions, revoke one session, logout the current session, or logo
 The system shall write audit events for registration, verification, login success, login failure, refresh, refresh reuse, password change, password reset, session revocation, logout, and logout-all.
 
 ## 9. API Access Rules
+
+Browser-facing web routes:
+
+```text
+POST /api/web/auth/register
+POST /api/web/auth/login
+POST /api/web/auth/logout
+POST /api/web/auth/email/verify
+GET  /api/web/auth/me
+GET  /api/web/documents
+POST /api/web/documents
+POST /api/web/questions
+```
+
+These routes shall proxy the gateway from the server side. Browser JavaScript shall not attach bearer tokens manually.
 
 Public routes:
 
@@ -129,6 +148,8 @@ POST   /api/questions
 | AAC-005 | Password reset revokes active sessions. |
 | AAC-006 | Private API routes reject missing bearer tokens. |
 | AAC-007 | Backend smoke test passes through register, verify, login, upload, index, question, and citation. |
+| AAC-008 | Browser JavaScript cannot read access tokens or refresh tokens. |
+| AAC-009 | Web authentication uses `httpOnly` cookies and server-side proxy routes. |
 
 ## 11. References
 
