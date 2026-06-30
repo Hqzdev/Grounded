@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+pydantic-settings==2.3.4
+email-validator==2.1.1
+eval-type-backport==0.2.2
+SQLAlchemy[asyncio]==2.0.31
+asyncpg==0.29.0
+pyjwt==2.8.0
+pwdlib[argon2]==0.2.1
