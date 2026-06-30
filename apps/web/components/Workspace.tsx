@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Logo } from "@/components/Chrome";
-import { ApiError, AnswerResponse, DocumentSummary, askQuestion, getMe, listDocuments, logout, queueDocument, refresh } from "@/lib/api";
-import { StoredAuthSession, clearStoredSession, readStoredSession, storeSession } from "@/lib/auth-session";
+import { ApiError, AnswerResponse, DocumentSummary, TenantSummary, UserSummary, askQuestion, getMe, listDocuments, logout, queueDocument } from "@/lib/api";
 
 const navItems = ["Chat", "Documents", "Usage", "Settings"];
 
@@ -17,7 +16,8 @@ type WorkspaceStatus = {
 
 export function Workspace() {
   const router = useRouter();
-  const [session, setSession] = useState<StoredAuthSession | null>(null);
+  const [user, setUser] = useState<UserSummary | null>(null);
+  const [tenant, setTenant] = useState<TenantSummary | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [answer, setAnswer] = useState<AnswerResponse | null>(null);
   const [status, setStatus] = useState<WorkspaceStatus | null>(null);
@@ -25,7 +25,6 @@ export function Workspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
 
-  const tenant = session?.tenant;
   const usageMetrics = useMemo(
     () => [
       { label: "Indexed docs", value: documents.filter((document) => document.status === "indexed").length },
@@ -40,51 +39,25 @@ export function Workspace() {
     let isActive = true;
 
     async function loadWorkspace() {
-      const storedSession = readStoredSession();
-
-      if (!storedSession) {
-        router.replace("/login");
-        return;
-      }
-
       try {
-        const me = await getMe(storedSession.accessToken);
-        const nextSession = {
-          ...storedSession,
-          user: me.user,
-          tenant: me.current_tenant
-        };
-        const nextDocuments = await listDocuments(nextSession.accessToken);
+        const me = await getMe();
+        const nextDocuments = await listDocuments();
 
         if (!isActive) {
           return;
         }
 
-        localStorage.setItem("grounded.auth", JSON.stringify(nextSession));
-        setSession(nextSession);
+        setUser(me.user);
+        setTenant(me.current_tenant);
         setDocuments(nextDocuments);
       } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 401) {
-          if (isActive) {
-            setStatus({ tone: "error", message: resolveWorkspaceError(error) });
-            setSession(storedSession);
-          }
+        if (error instanceof ApiError && error.status === 401) {
+          router.replace("/login");
           return;
         }
 
-        try {
-          const refreshedSession = storeSession(await refresh(storedSession.refreshToken));
-          const nextDocuments = await listDocuments(refreshedSession.accessToken);
-
-          if (!isActive) {
-            return;
-          }
-
-          setSession(refreshedSession);
-          setDocuments(nextDocuments);
-        } catch {
-          clearStoredSession();
-          router.replace("/login");
+        if (isActive) {
+          setStatus({ tone: "error", message: resolveWorkspaceError(error) });
         }
       } finally {
         if (isActive) {
@@ -103,7 +76,7 @@ export function Workspace() {
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!session) {
+    if (!user) {
       router.replace("/login");
       return;
     }
@@ -121,10 +94,9 @@ export function Workspace() {
           title,
           content_type: "text/markdown",
           content
-        },
-        session.accessToken
+        }
       );
-      setDocuments(await listDocuments(session.accessToken));
+      setDocuments(await listDocuments());
       setStatus({ tone: "success", message: "Document queued for indexing." });
       event.currentTarget.reset();
     } catch (error) {
@@ -137,7 +109,7 @@ export function Workspace() {
   async function handleAsk(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!session) {
+    if (!user) {
       router.replace("/login");
       return;
     }
@@ -148,7 +120,7 @@ export function Workspace() {
     setIsAsking(true);
 
     try {
-      setAnswer(await askQuestion({ question }, session.accessToken));
+      setAnswer(await askQuestion({ question }));
       event.currentTarget.reset();
     } catch (error) {
       setStatus({ tone: "error", message: resolveWorkspaceError(error) });
@@ -158,13 +130,7 @@ export function Workspace() {
   }
 
   async function handleLogout() {
-    if (session) {
-      try {
-        await logout(session.accessToken);
-      } catch {}
-    }
-
-    clearStoredSession();
+    await logout();
     router.replace("/login");
   }
 
@@ -191,7 +157,7 @@ export function Workspace() {
         <div style={{ marginTop: "auto" }}>
           <div className="workspace-card" style={{ background: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.1)", color: "var(--paper)" }}>
             <strong>{tenant?.name ?? "Workspace"}</strong>
-            <p style={{ color: "var(--soft)", fontSize: 13, margin: "8px 0 12px" }}>{session?.user.email}</p>
+            <p style={{ color: "var(--soft)", fontSize: 13, margin: "8px 0 12px" }}>{user?.email}</p>
             <button className="btn btn-ghost" onClick={handleLogout} style={{ width: "100%" }} type="button">Logout</button>
           </div>
         </div>

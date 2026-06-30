@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Logo } from "@/components/Chrome";
 import { ApiError, login, register, verifyEmail } from "@/lib/api";
-import { storeSession } from "@/lib/auth-session";
 
 type AuthPageProps = {
   mode: "login" | "register";
@@ -53,13 +52,12 @@ export function AuthPage({ mode }: AuthPageProps) {
         await verifyEmail(registration.dev_verification_token);
       }
 
-      const session = await login({
+      await login({
         email,
         password,
         device_label: navigator.userAgent
       });
 
-      storeSession(session);
       router.push("/app");
     } catch (error) {
       setStatus({
