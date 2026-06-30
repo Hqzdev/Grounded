@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { clearAuthCookies, getAccessToken, getRefreshToken, setAuthCookies } from "@/lib/server-auth";
 import { parseResponse, resolveErrorMessage } from "@/lib/http";
 
@@ -7,6 +8,7 @@ const gatewayUrl = process.env.GROUNDED_GATEWAY_URL ?? process.env.NEXT_PUBLIC_G
 type ProxyOptions = {
   method: "GET" | "POST" | "DELETE";
   path: string;
+  request?: NextRequest;
   body?: unknown;
 };
 
@@ -54,8 +56,8 @@ export async function proxyPrivate(options: ProxyOptions) {
   return nextResponse;
 }
 
-export async function loginThroughGateway(body: unknown) {
-  const response = await callGateway({ method: "POST", path: "/api/auth/login", body });
+export async function loginThroughGateway(request: NextRequest, body: unknown) {
+  const response = await callGateway({ method: "POST", path: "/api/auth/login", request, body });
   const payload = await parseResponse(response);
   const nextResponse = NextResponse.json(sanitizeAuthPayload(payload), { status: response.status });
 
@@ -66,11 +68,11 @@ export async function loginThroughGateway(body: unknown) {
   return nextResponse;
 }
 
-export async function logoutThroughGateway() {
+export async function logoutThroughGateway(request: NextRequest) {
   const accessToken = await getAccessToken();
 
   if (accessToken) {
-    await callGateway({ method: "POST", path: "/api/auth/logout" }, accessToken);
+    await callGateway({ method: "POST", path: "/api/auth/logout", request }, accessToken);
   }
 
   const response = NextResponse.json({ message: "Logged out." });
@@ -110,12 +112,24 @@ async function callGateway(options: ProxyOptions, accessToken?: string) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
+  forwardHeader(options.request, headers, "user-agent");
+  forwardHeader(options.request, headers, "x-forwarded-for");
+  forwardHeader(options.request, headers, "x-real-ip");
+
   return fetch(`${gatewayUrl}${options.path}`, {
     method: options.method,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store"
   });
+}
+
+function forwardHeader(request: NextRequest | undefined, headers: Headers, name: string) {
+  const value = request?.headers.get(name);
+
+  if (value) {
+    headers.set(name, value);
+  }
 }
 
 function sanitizeAuthPayload(payload: unknown) {

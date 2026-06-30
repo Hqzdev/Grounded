@@ -167,23 +167,26 @@ async fn list_document_jobs(
 
 async fn register(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/register", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/register", payload, &headers).await
 }
 
 async fn login(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/login", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/login", payload, &headers).await
 }
 
 async fn refresh(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/refresh", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/refresh", payload, &headers).await
 }
 
 async fn logout(
@@ -209,30 +212,34 @@ async fn me(
 
 async fn verify_email(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/email/verify", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/email/verify", payload, &headers).await
 }
 
 async fn resend_verification(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/email/resend", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/email/resend", payload, &headers).await
 }
 
 async fn forgot_password(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/password/forgot", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/password/forgot", payload, &headers).await
 }
 
 async fn reset_password(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    proxy_json(&state.client, &state.services.auth, "/auth/password/reset", payload).await
+    proxy_json_with_headers(&state.client, &state.services.auth, "/auth/password/reset", payload, &headers).await
 }
 
 async fn change_password(
@@ -308,28 +315,6 @@ async fn answer_question(
     .await
 }
 
-async fn proxy_json<T: Serialize>(
-    client: &Client,
-    base_url: &str,
-    path: &str,
-    payload: T,
-) -> Result<impl IntoResponse, StatusCode> {
-    let response = client
-        .post(format!("{base_url}{path}"))
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
-
-    let status = response.status();
-    let body = response
-        .json::<serde_json::Value>()
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
-
-    Ok((status, Json(body)))
-}
-
 async fn proxy_json_with_headers<T: Serialize>(
     client: &Client,
     base_url: &str,
@@ -339,9 +324,7 @@ async fn proxy_json_with_headers<T: Serialize>(
 ) -> Result<impl IntoResponse, StatusCode> {
     let mut request = client.post(format!("{base_url}{path}")).json(&payload);
 
-    if let Some(value) = headers.get(header::AUTHORIZATION) {
-        request = request.header(header::AUTHORIZATION.as_str(), value.as_bytes());
-    }
+    request = apply_forwarded_headers(request, headers);
 
     let response = request.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
     let status = response.status();
@@ -361,9 +344,7 @@ async fn proxy_get(
 ) -> Result<impl IntoResponse, StatusCode> {
     let mut request = client.get(format!("{base_url}{path}"));
 
-    if let Some(value) = headers.get(header::AUTHORIZATION) {
-        request = request.header(header::AUTHORIZATION.as_str(), value.as_bytes());
-    }
+    request = apply_forwarded_headers(request, headers);
 
     let response = request.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
     let status = response.status();
@@ -383,9 +364,7 @@ async fn proxy_delete(
 ) -> Result<impl IntoResponse, StatusCode> {
     let mut request = client.delete(format!("{base_url}{path}"));
 
-    if let Some(value) = headers.get(header::AUTHORIZATION) {
-        request = request.header(header::AUTHORIZATION.as_str(), value.as_bytes());
-    }
+    request = apply_forwarded_headers(request, headers);
 
     let response = request.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
     let status = response.status();
@@ -395,6 +374,21 @@ async fn proxy_delete(
         .map_err(|_| StatusCode::BAD_GATEWAY)?;
 
     Ok((status, Json(body)))
+}
+
+fn apply_forwarded_headers(mut request: reqwest::RequestBuilder, headers: &HeaderMap) -> reqwest::RequestBuilder {
+    for name in [
+        header::AUTHORIZATION.as_str(),
+        header::USER_AGENT.as_str(),
+        "x-forwarded-for",
+        "x-real-ip",
+    ] {
+        if let Some(value) = headers.get(name) {
+            request = request.header(name, value.as_bytes());
+        }
+    }
+
+    request
 }
 
 async fn check_service(client: &Client, base_url: &str) -> DependencyHealth {

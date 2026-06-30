@@ -158,6 +158,18 @@ class IdentityRepository:
         row = result.mappings().first()
         return dict(row) if row else None
 
+    async def find_active_session(self, user_id: str, session_id: str) -> dict | None:
+        result = await self.session.execute(
+            text(
+                'SELECT "id", "userId", "tenantId", "expiresAt", "revokedAt" '
+                'FROM "UserSession" '
+                'WHERE "id" = :session_id AND "userId" = :user_id AND "revokedAt" IS NULL AND "expiresAt" > now()'
+            ),
+            {"user_id": user_id, "session_id": session_id},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
     async def mark_refresh_token_used(self, token_id: str, replaced_by_id: str | None) -> None:
         await self.session.execute(
             text('UPDATE "RefreshToken" SET "usedAt" = now(), "replacedById" = :replaced_by_id WHERE "id" = :token_id'),
@@ -315,6 +327,47 @@ class IdentityRepository:
                 "user_agent": user_agent,
                 "metadata": json.dumps(metadata or {}),
             },
+        )
+
+    async def find_rate_limit(self, key: str) -> dict | None:
+        result = await self.session.execute(
+            text(
+                'SELECT "key", "action", "attempts", "windowStart", "lockedUntil" '
+                'FROM "AuthRateLimit" '
+                'WHERE "key" = :key'
+            ),
+            {"key": key},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
+    async def save_rate_limit(self, key: str, action: str, attempts: int, window_start: datetime, locked_until: datetime | None) -> None:
+        await self.session.execute(
+            text(
+                'INSERT INTO "AuthRateLimit" ("key", "action", "attempts", "windowStart", "lockedUntil", "updatedAt") '
+                'VALUES (:key, :action, :attempts, :window_start, :locked_until, now()) '
+                'ON CONFLICT ("key") DO UPDATE SET '
+                '"attempts" = EXCLUDED."attempts", '
+                '"windowStart" = EXCLUDED."windowStart", '
+                '"lockedUntil" = EXCLUDED."lockedUntil", '
+                '"updatedAt" = now()'
+            ),
+            {
+                "key": key,
+                "action": action,
+                "attempts": attempts,
+                "window_start": window_start,
+                "locked_until": locked_until,
+            },
+        )
+
+    async def clear_rate_limits(self, keys: list[str]) -> None:
+        if not keys:
+            return
+
+        await self.session.execute(
+            text('DELETE FROM "AuthRateLimit" WHERE "key" = ANY(:keys)'),
+            {"keys": keys},
         )
 
     async def commit(self) -> None:
