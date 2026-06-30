@@ -63,6 +63,23 @@ The detailed auth specification is in `docs/auth-security.md`.
 
 ## Local Runtime
 
+Start the full local development loop:
+
+```bash
+npm run dev
+```
+
+This starts the backend Docker services, waits for the gateway, applies Prisma migrations, and runs the Next.js development server.
+
+Backend-only commands:
+
+```bash
+npm run dev:backend
+npm run dev:backend:down
+```
+
+Raw Docker Compose remains available when you need full service control:
+
 ```bash
 docker compose -f infra/docker/docker-compose.yml up --build
 ```

@@ -117,6 +117,12 @@ button {
   transform: translateY(-1px);
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
 .btn-primary {
   background: var(--accent);
   box-shadow: 0 12px 28px -16px rgba(var(--accent-rgb), 0.8);
@@ -750,6 +756,26 @@ button {
 .field input:focus {
   border-color: var(--accent);
   outline: 3px solid rgba(var(--accent-rgb), 0.16);
+}
+
+.auth-message {
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin-top: 16px;
+  padding: 11px 12px;
+}
+
+.auth-message.error {
+  background: #ffe9e1;
+  border: 1px solid #ffc3ad;
+  color: #9b2c0f;
+}
+
+.auth-message.success {
+  background: #eff6ec;
+  border: 1px solid var(--line-strong);
+  color: #0b7d52;
 }
 
 .workspace {
