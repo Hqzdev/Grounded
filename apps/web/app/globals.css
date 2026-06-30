@@ -785,6 +785,15 @@ button {
   min-height: 100vh;
 }
 
+.workspace-loading {
+  align-items: center;
+  background: var(--paper);
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  min-height: 100vh;
+}
+
 .sidebar {
   background: var(--ink);
   color: var(--paper);
@@ -824,6 +833,36 @@ button {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+}
+
+.workspace-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 20px 0;
+}
+
+.workspace-form input,
+.upload-form textarea {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  min-height: 46px;
+  padding: 0 13px;
+}
+
+.upload-form textarea {
+  line-height: 1.5;
+  min-height: 190px;
+  padding: 13px;
+  resize: vertical;
+}
+
+.workspace-form input:focus,
+.upload-form textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid rgba(var(--accent-rgb), 0.16);
 }
 
 .search-box {

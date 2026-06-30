@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Logo } from "@/components/Chrome";
-import { ApiError, AuthResponse, login, register, verifyEmail } from "@/lib/api";
+import { ApiError, login, register, verifyEmail } from "@/lib/api";
+import { storeSession } from "@/lib/auth-session";
 
 type AuthPageProps = {
   mode: "login" | "register";
@@ -14,8 +15,6 @@ type AuthStatus = {
   tone: "success" | "error";
   message: string;
 };
-
-const authStorageKey = "grounded.auth";
 
 export function AuthPage({ mode }: AuthPageProps) {
   const router = useRouter();
@@ -151,19 +150,6 @@ function getFormValue(form: FormData, key: string) {
   }
 
   return value.trim();
-}
-
-function storeSession(session: AuthResponse) {
-  localStorage.setItem(
-    authStorageKey,
-    JSON.stringify({
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token,
-      expiresIn: session.expires_in,
-      user: session.user,
-      tenant: session.tenant
-    })
-  );
 }
 
 function resolveAuthError(error: unknown) {
