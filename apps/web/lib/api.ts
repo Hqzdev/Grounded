@@ -44,14 +44,51 @@ export type LoginRequest = {
 };
 
 export type QuestionRequest = {
-  tenant_id: string;
   question: string;
 };
 
 export type DocumentRequest = {
+  filename: string;
+  title?: string;
+  content_type: string;
+  content: string;
+};
+
+export type MeResponse = {
+  user: UserSummary;
+  tenants: TenantSummary[];
+  current_tenant: TenantSummary | null;
+};
+
+export type DocumentSummary = {
+  id: string;
   tenant_id: string;
+  title: string;
   filename: string;
   content_type: string;
+  status: string;
+  current_version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CitationResponse = {
+  document_id: string;
+  document_title: string;
+  chunk_id: string;
+  snippet: string;
+  score: number;
+  source_start: number | null;
+  source_end: number | null;
+};
+
+export type AnswerResponse = {
+  session_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  answer: string;
+  citations: CitationResponse[];
+  created_at: string;
 };
 
 export class ApiError extends Error {
@@ -102,8 +139,22 @@ export async function logout(accessToken: string) {
   });
 }
 
+export async function getMe(accessToken: string) {
+  return request<MeResponse>("/api/auth/me", {
+    method: "GET",
+    accessToken
+  });
+}
+
+export async function listDocuments(accessToken: string) {
+  return request<DocumentSummary[]>("/api/documents", {
+    method: "GET",
+    accessToken
+  });
+}
+
 export async function askQuestion(payload: QuestionRequest, accessToken?: string) {
-  return request("/api/questions", {
+  return request<AnswerResponse>("/api/questions", {
     method: "POST",
     body: payload,
     accessToken
