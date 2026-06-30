@@ -5,6 +5,7 @@ export async function POST(request: NextRequest) {
   return proxyPublic({
     method: "POST",
     path: "/api/auth/email/verify",
+    request,
     body: await request.json()
   });
 }

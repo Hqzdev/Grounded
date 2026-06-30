@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import uuid4
+from hashlib import sha256
 import re
 from sqlalchemy.exc import IntegrityError
 from app.config import get_settings
@@ -33,12 +34,69 @@ from app.security import PasswordService, SecretTokenService, TokenService
 class RequestContext:
     ip_address: str | None
     user_agent: str | None
+    route: str | None = None
+    action: str | None = None
 
 
 class SlugService:
     def from_name(self, value: str) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or "workspace"
+
+
+class RateLimitService:
+    def __init__(self, repository: IdentityRepository) -> None:
+        self.repository = repository
+
+    async def enforce(self, action: str, context: RequestContext, subject: str | None = None) -> None:
+        settings = get_settings()
+        now = datetime.utcnow()
+        window = timedelta(minutes=settings.auth_rate_limit_window_minutes)
+        lockout = timedelta(minutes=settings.auth_rate_limit_lockout_minutes)
+        keys = [(self.ip_key(action, context.ip_address), settings.auth_rate_limit_ip_attempts)]
+
+        if subject:
+            keys.append((self.subject_key(action, subject), settings.auth_rate_limit_email_attempts))
+
+        for key, limit in keys:
+            state = await self.repository.find_rate_limit(key)
+
+            if state and state["lockedUntil"] and state["lockedUntil"] > now:
+                raise AuthError.rate_limited()
+
+            attempts = 1
+            window_start = now
+
+            if state and state["windowStart"] + window > now:
+                attempts = state["attempts"] + 1
+                window_start = state["windowStart"]
+
+            locked_until = now + lockout if attempts > limit else None
+            await self.repository.save_rate_limit(key, action, attempts, window_start, locked_until)
+
+            if locked_until:
+                await self.repository.audit("rate_limit_exceeded", ip_address=context.ip_address, user_agent=context.user_agent, metadata={
+                    "route": context.route,
+                    "action": context.action,
+                    "limit_action": action,
+                })
+                await self.repository.commit()
+                raise AuthError.rate_limited()
+
+    async def clear(self, action: str, context: RequestContext, subject: str | None = None) -> None:
+        keys = [self.ip_key(action, context.ip_address)]
+
+        if subject:
+            keys.append(self.subject_key(action, subject))
+
+        await self.repository.clear_rate_limits(keys)
+
+    def ip_key(self, action: str, ip_address: str | None) -> str:
+        return f"{action}:ip:{ip_address or 'unknown'}"
+
+    def subject_key(self, action: str, subject: str) -> str:
+        digest = sha256(subject.strip().lower().encode("utf-8")).hexdigest()
+        return f"{action}:subject:{digest}"
 
 
 class IdentityService:
@@ -48,10 +106,14 @@ class IdentityService:
         self.tokens = TokenService()
         self.secrets = SecretTokenService()
         self.slugs = SlugService()
+        self.rate_limits = RateLimitService(repository)
 
     async def register(self, request: RegisterRequest, context: RequestContext) -> RegisterResponse:
+        await self.rate_limits.enforce("register", context, request.email)
         existing_user = await self.repository.find_user_by_email(request.email)
         if existing_user:
+            await self.repository.audit("register_failed", existing_user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context, "email_taken"))
+            await self.repository.commit()
             raise AuthError.email_taken()
 
         slug = request.tenant_slug or self.slugs.from_name(request.tenant_name)
@@ -61,7 +123,8 @@ class IdentityService:
             tenant = await self.repository.create_tenant(request.tenant_name, slug)
             membership = await self.repository.create_membership(tenant["id"], user["id"], "owner")
             verification_token = await self.issue_email_verification(user["id"], user["email"])
-            await self.repository.audit("user_registered", user["id"], ip_address=context.ip_address, user_agent=context.user_agent)
+            await self.repository.audit("user_registered", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context))
+            await self.rate_limits.clear("register", context, request.email)
             await self.repository.commit()
         except IntegrityError as exc:
             await self.repository.rollback()
@@ -74,21 +137,23 @@ class IdentityService:
         )
 
     async def login(self, request: LoginRequest, context: RequestContext) -> AuthResponse:
+        await self.rate_limits.enforce("login", context, request.email)
         user = await self.repository.find_user_by_email(request.email)
         if not user or not user["passwordHash"] or not self.passwords.verify(request.password, user["passwordHash"]):
-            await self.repository.audit("login_failed", user["id"] if user else None, ip_address=context.ip_address, user_agent=context.user_agent)
+            await self.repository.audit("login_failed", user["id"] if user else None, ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context, "invalid_credentials"))
             await self.repository.commit()
             raise AuthError.invalid_credentials()
 
         if not user["emailVerifiedAt"]:
-            await self.repository.audit("login_failed", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata={"reason": "email_not_verified"})
+            await self.repository.audit("login_failed", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context, "email_not_verified"))
             await self.repository.commit()
             raise AuthError.email_not_verified()
 
         tenants = await self.repository.list_tenants_for_user(user["id"])
         tenant = tenants[0] if tenants else None
         response = await self.create_auth_response(user, tenant, context, request.device_label)
-        await self.repository.audit("login_succeeded", user["id"], ip_address=context.ip_address, user_agent=context.user_agent)
+        await self.repository.audit("login_succeeded", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context))
+        await self.rate_limits.clear("login", context, request.email)
         await self.repository.commit()
         return response
 
@@ -102,7 +167,7 @@ class IdentityService:
 
         if stored["usedAt"] or stored["revokedAt"] or stored["sessionRevokedAt"] or stored["expiresAt"] <= now or stored["sessionExpiresAt"] <= now:
             await self.repository.revoke_family(stored["familyId"])
-            await self.repository.audit("refresh_reuse_detected", stored["userId"], stored["sessionId"], context.ip_address, context.user_agent)
+            await self.repository.audit("refresh_reuse_detected", stored["userId"], stored["sessionId"], context.ip_address, context.user_agent, self.audit_metadata(context, "refresh_reuse_or_revoked_session"))
             await self.repository.commit()
             raise AuthError.invalid_token()
 
@@ -112,7 +177,7 @@ class IdentityService:
         new_refresh = await self.repository.create_refresh_token(stored["userId"], stored["sessionId"], stored["familyId"], refresh_hash, refresh_expires_at)
         await self.repository.mark_refresh_token_used(stored["id"], new_refresh["id"])
         await self.repository.touch_session(stored["sessionId"])
-        await self.repository.audit("token_refreshed", stored["userId"], stored["sessionId"], context.ip_address, context.user_agent)
+        await self.repository.audit("token_refreshed", stored["userId"], stored["sessionId"], context.ip_address, context.user_agent, self.audit_metadata(context))
         await self.repository.commit()
 
         tenant = await self.current_tenant_dict(stored["userId"], stored["tenantId"])
@@ -143,15 +208,20 @@ class IdentityService:
         return GenericMessage(message="Email verified")
 
     async def resend_verification(self, request: ResendVerificationRequest, context: RequestContext) -> GenericMessage:
+        await self.rate_limits.enforce("email_resend", context, request.email)
         user = await self.repository.find_user_by_email(request.email)
         dev_token = None
         if user and not user["emailVerifiedAt"]:
             dev_token = await self.issue_email_verification(user["id"], user["email"])
-            await self.repository.audit("email_verification_requested", user["id"], ip_address=context.ip_address, user_agent=context.user_agent)
+            await self.repository.audit("email_verification_requested", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context))
+            await self.rate_limits.clear("email_resend", context, request.email)
+            await self.repository.commit()
+        else:
             await self.repository.commit()
         return GenericMessage(message="If the account exists and requires verification, an email has been sent", dev_token=dev_token if get_settings().expose_dev_tokens else None)
 
     async def forgot_password(self, request: PasswordForgotRequest, context: RequestContext) -> GenericMessage:
+        await self.rate_limits.enforce("password_forgot", context, request.email)
         user = await self.repository.find_user_by_email(request.email)
         dev_token = None
         if user:
@@ -159,33 +229,41 @@ class IdentityService:
             expires_at = datetime.utcnow() + timedelta(minutes=get_settings().password_reset_minutes)
             await self.repository.create_password_reset(user["id"], self.secrets.hash(raw_token), expires_at)
             await self.repository.create_outbox_email(user["email"], "Reset your Grounded password", raw_token, {"purpose": "password_reset"})
-            await self.repository.audit("password_reset_requested", user["id"], ip_address=context.ip_address, user_agent=context.user_agent)
+            await self.repository.audit("password_reset_requested", user["id"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context))
+            await self.rate_limits.clear("password_forgot", context, request.email)
             await self.repository.commit()
             dev_token = raw_token
+        else:
+            await self.repository.commit()
         return GenericMessage(message="If the account exists, a password reset email has been sent", dev_token=dev_token if get_settings().expose_dev_tokens else None)
 
     async def reset_password(self, request: PasswordResetRequest, context: RequestContext) -> GenericMessage:
+        await self.rate_limits.enforce("password_reset", context)
         stored = await self.repository.find_password_reset(self.secrets.hash(request.token))
         now = datetime.utcnow()
         if not stored or stored["usedAt"] or stored["expiresAt"] <= now:
+            await self.repository.commit()
             raise AuthError.invalid_token()
 
         await self.repository.update_password(stored["userId"], self.passwords.hash(request.new_password))
         await self.repository.mark_password_reset_used(stored["id"])
         await self.repository.revoke_all_sessions(stored["userId"])
-        await self.repository.audit("password_reset_completed", stored["userId"], ip_address=context.ip_address, user_agent=context.user_agent)
+        await self.repository.audit("password_reset_completed", stored["userId"], ip_address=context.ip_address, user_agent=context.user_agent, metadata=self.audit_metadata(context))
+        await self.rate_limits.clear("password_reset", context)
         await self.repository.commit()
         return GenericMessage(message="Password reset completed")
 
     async def change_password(self, user_id: str, session_id: str, request: PasswordChangeRequest, context: RequestContext) -> GenericMessage:
         user = await self.repository.find_user_by_email((await self.repository.find_user_by_id(user_id))["email"])
         if not user or not user["passwordHash"] or not self.passwords.verify(request.current_password, user["passwordHash"]):
+            await self.repository.audit("password_change_failed", user_id, session_id, context.ip_address, context.user_agent, self.audit_metadata(context, "invalid_current_password"))
+            await self.repository.commit()
             raise AuthError.invalid_credentials()
 
         await self.repository.update_password(user_id, self.passwords.hash(request.new_password))
         if request.logout_other_sessions:
             await self.repository.revoke_all_sessions(user_id, session_id)
-        await self.repository.audit("password_change_succeeded", user_id, session_id, context.ip_address, context.user_agent)
+        await self.repository.audit("password_change_succeeded", user_id, session_id, context.ip_address, context.user_agent, self.audit_metadata(context))
         await self.repository.commit()
         return GenericMessage(message="Password changed")
 
@@ -211,6 +289,18 @@ class IdentityService:
         await self.repository.audit("session_revoked", user_id, session_id, context.ip_address, context.user_agent)
         await self.repository.commit()
         return GenericMessage(message="Session revoked")
+
+    async def require_active_session(self, claims: dict, context: RequestContext) -> dict:
+        session = await self.repository.find_active_session(claims["sub"], claims["sid"])
+
+        if not session:
+            await self.repository.audit("session_rejected", claims.get("sub"), claims.get("sid"), context.ip_address, context.user_agent, self.audit_metadata(context, "inactive_session"))
+            await self.repository.commit()
+            raise AuthError.invalid_token()
+
+        await self.repository.touch_session(session["id"])
+        await self.repository.commit()
+        return claims
 
     async def me(self, user_id: str, tenant_id: str | None) -> MeResponse:
         user = await self.repository.find_user_by_id(user_id)
@@ -284,3 +374,14 @@ class IdentityService:
             user_agent=session["userAgent"],
             device_label=session["deviceLabel"],
         )
+
+    def audit_metadata(self, context: RequestContext, failure_reason: str | None = None) -> dict:
+        metadata = {
+            "route": context.route,
+            "action": context.action,
+        }
+
+        if failure_reason:
+            metadata["failure_reason"] = failure_reason
+
+        return {key: value for key, value in metadata.items() if value is not None}

@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     email_verification_hours: int = Field(default=24)
     password_reset_minutes: int = Field(default=30)
     expose_dev_tokens: bool = Field(default=True)
+    auth_rate_limit_window_minutes: int = Field(default=15)
+    auth_rate_limit_lockout_minutes: int = Field(default=15)
+    auth_rate_limit_ip_attempts: int = Field(default=20)
+    auth_rate_limit_email_attempts: int = Field(default=5)
 
 
 @lru_cache

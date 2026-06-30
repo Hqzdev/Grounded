@@ -11,6 +11,10 @@ class AuthError:
         return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     @staticmethod
+    def rate_limited() -> HTTPException:
+        return HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many attempts. Try again later")
+
+    @staticmethod
     def email_not_verified() -> HTTPException:
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email verification is required")
 

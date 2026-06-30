@@ -1,5 +1,6 @@
+import { NextRequest } from "next/server";
 import { logoutThroughGateway } from "@/lib/server-gateway";
 
-export async function POST() {
-  return logoutThroughGateway();
+export async function POST(request: NextRequest) {
+  return logoutThroughGateway(request);
 }

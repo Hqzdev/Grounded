@@ -16,6 +16,7 @@
   --coral: #ff6a3d;
   --blue: #3478f6;
   --shadow: 0 24px 60px -32px rgba(22, 33, 27, 0.42);
+  --nav-height: 66px;
 }
 
 * {
@@ -24,6 +25,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: var(--nav-height);
 }
 
 body {
@@ -59,6 +61,7 @@ button {
 .page-shell {
   isolation: isolate;
   min-height: 100vh;
+  padding-top: var(--nav-height);
   background:
     radial-gradient(circle at 78% 8%, rgba(214, 242, 78, 0.28), transparent 26rem),
     radial-gradient(circle at 12% 32%, rgba(17, 184, 119, 0.14), transparent 24rem),
@@ -148,9 +151,11 @@ button {
   background: rgba(243, 241, 231, 0.84);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(218, 215, 201, 0.82);
-  position: sticky;
+  left: 0;
+  position: fixed;
+  right: 0;
   top: 0;
-  z-index: 40;
+  z-index: 100;
 }
 
 .page-shell > section,
@@ -163,7 +168,7 @@ button {
   align-items: center;
   display: flex;
   gap: 28px;
-  min-height: 66px;
+  min-height: var(--nav-height);
 }
 
 .brand {
