@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { CookieConsent } from "@/components/CookieConsent";
 import { CustomCursor } from "@/components/CustomCursor";
 import "./globals.css";
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <CustomCursor />
         {children}
+        <CookieConsent />
       </body>
     </html>
   );

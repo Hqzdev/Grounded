@@ -43,6 +43,8 @@ The backend now uses an auth-first request model. Users register into a tenant, 
 
 Protected document and question APIs require `Authorization: Bearer $ACCESS_TOKEN`. Auth state is backed by Prisma-managed PostgreSQL tables for user sessions, refresh tokens, verification tokens, password reset tokens, and audit events.
 
+The web application uses server-side Next.js routes for browser authentication. Access and refresh tokens are stored in `httpOnly` cookies, not in browser JavaScript. Public privacy, terms, cookie, and security pages are available from the footer and consent menu.
+
 Implemented auth flows:
 
 | Flow | Endpoint |

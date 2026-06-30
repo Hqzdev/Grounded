@@ -45,6 +45,7 @@ This register defines the controlled documentation set for Grounded. The documen
 | `database.md` | Database requirements and data model specification. | Draft |
 | `api-contracts.md` | Public API requirements and response contracts. | Draft |
 | `auth-security.md` | Authentication, session, token, password, and audit requirements. | Draft |
+| `privacy-and-cookies.md` | Privacy pages, cookie categories, consent, and necessary auth cookies. | Draft |
 | `ci-cd.md` | Continuous integration checks, branch policy, and delivery roadmap. | Draft |
 | `ingestion-pipeline.md` | Document ingestion and asynchronous processing requirements. | Draft |
 | `retrieval-pipeline.md` | Retrieval, answer generation, citation, and usage requirements. | Draft |
@@ -60,11 +61,12 @@ This register defines the controlled documentation set for Grounded. The documen
 4. Read Database before implementing persistence.
 5. Read API Contracts before connecting the frontend.
 6. Read Auth Security before changing authentication or private API access.
-7. Read CI/CD before changing GitHub Actions, release, or branch policy.
-8. Read Ingestion Pipeline and Retrieval Pipeline before implementing RAG flows.
-9. Read Tenant Isolation before writing tenant-scoped queries.
-10. Read Local Development before running the system.
-11. Read Development Workflow before opening a pull request.
+7. Read Privacy and Cookies before changing consent, legal pages, or browser storage.
+8. Read CI/CD before changing GitHub Actions, release, or branch policy.
+9. Read Ingestion Pipeline and Retrieval Pipeline before implementing RAG flows.
+10. Read Tenant Isolation before writing tenant-scoped queries.
+11. Read Local Development before running the system.
+12. Read Development Workflow before opening a pull request.
 
 ## 4. Documentation Standards
 
