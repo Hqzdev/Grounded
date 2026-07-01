@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from app.config import get_settings
 from app.errors import IngestionError
 from app.queue import IngestionQueue
 from app.repositories import DocumentRepository
@@ -17,16 +18,26 @@ class DocumentService:
         self.queue = queue
 
     async def create_document(self, tenant_id: str, user_id: str, request: DocumentCreateRequest) -> DocumentCreateResponse:
-        if request.content_type not in self.supported_content_types:
+        content_type = request.content_type.strip().lower()
+        if content_type not in self.supported_content_types:
             raise IngestionError.unsupported_content_type()
+
+        byte_size = len(request.content.encode("utf-8"))
+        if byte_size > get_settings().max_document_bytes:
+            raise IngestionError.document_too_large()
 
         title = request.title or request.filename
         checksum = sha256(request.content.encode("utf-8")).hexdigest()
+        duplicate = await self.repository.find_document_by_checksum(tenant_id, checksum)
+        if duplicate:
+            raise IngestionError.duplicate_document()
 
         try:
-            document = await self.repository.create_document(tenant_id, user_id, title, request.filename, request.content_type)
+            document = await self.repository.create_document(tenant_id, user_id, title, request.filename, content_type)
             object_key = f"{tenant_id}/{document['id']}/1/{request.filename}"
-            byte_size = self.storage.put_text(object_key, request.content, request.content_type)
+            stored_byte_size = self.storage.put_text(object_key, request.content, content_type)
+            if stored_byte_size != byte_size:
+                byte_size = stored_byte_size
             version = await self.repository.create_version(tenant_id, document["id"], object_key, checksum, byte_size, request.content)
             job = await self.repository.create_job(tenant_id, document["id"], version["id"])
             await self.repository.commit()
@@ -61,6 +72,36 @@ class DocumentService:
         if not document:
             raise IngestionError.document_not_found()
         return [self.job_summary(job) for job in await self.repository.list_jobs_for_document(tenant_id, document_id)]
+
+    async def delete_document(self, tenant_id: str, document_id: str) -> DocumentSummary:
+        document = await self.repository.soft_delete_document(tenant_id, document_id)
+        if not document:
+            raise IngestionError.document_not_found()
+        await self.repository.commit()
+        return self.document_summary(document)
+
+    async def retry_job(self, tenant_id: str, document_id: str, job_id: str) -> IngestionJobSummary:
+        document = await self.repository.find_document(tenant_id, document_id)
+        if not document:
+            raise IngestionError.document_not_found()
+
+        job = await self.repository.find_job_for_document(tenant_id, document_id, job_id)
+        if not job:
+            raise IngestionError.job_not_found()
+        if job["status"] != "failed":
+            raise IngestionError.retry_not_allowed()
+
+        retry = await self.repository.create_retry_job(tenant_id, document_id, job["documentVersionId"])
+        await self.repository.commit()
+
+        try:
+            await self.queue.publish_job(retry["id"])
+        except Exception as exc:
+            await self.repository.mark_publish_failed(tenant_id, document_id, retry["id"], str(exc))
+            await self.repository.commit()
+            raise
+
+        return self.job_summary(retry)
 
     def document_summary(self, document: dict) -> DocumentSummary:
         return DocumentSummary(
