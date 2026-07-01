@@ -61,6 +61,35 @@ jobs:
       - run: npm ci
       - run: npm run check:web
 
+  security-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: grounded
+          POSTGRES_USER: grounded
+          POSTGRES_PASSWORD: grounded
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grounded -d grounded"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://grounded:grounded@localhost:5432/grounded?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
+      - run: npm run db:generate
+      - run: npm run test:security
+
   docker-build:
     runs-on: ubuntu-latest
     needs:
@@ -68,6 +97,7 @@ jobs:
       - python-services
       - gateway
       - web
+      - security-tests
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f infra/docker/docker-compose.yml build gateway auth ingestion embedding retrieval web
