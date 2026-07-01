@@ -105,6 +105,20 @@ export type AnswerResponse = {
   created_at: string;
 };
 
+export type ProviderConfig = {
+  provider: string;
+  model: string;
+  ready: boolean;
+  status: string;
+};
+
+export type ProviderStatus = {
+  embedding: ProviderConfig;
+  answer: ProviderConfig;
+  retrieval_limit: number;
+  qdrant_collection: string;
+};
+
 export async function register(payload: RegisterRequest) {
   return request<RegisterResponse>("/api/web/auth/register", {
     method: "POST",
@@ -150,6 +164,12 @@ export async function listDocumentJobs(documentId: string) {
   });
 }
 
+export async function getProviderStatus() {
+  return request<ProviderStatus>("/api/web/providers/status", {
+    method: "GET"
+  });
+}
+
 export async function askQuestion(payload: QuestionRequest) {
   return request<AnswerResponse>("/api/web/questions", {
     method: "POST",
@@ -172,6 +192,12 @@ export async function deleteDocument(documentId: string) {
 
 export async function retryIngestionJob(documentId: string, jobId: string) {
   return request(`/api/web/documents/${documentId}/jobs/${jobId}/retry`, {
+    method: "POST"
+  });
+}
+
+export async function reindexDocument(documentId: string) {
+  return request<IngestionJobSummary>(`/api/web/documents/${documentId}/reindex`, {
     method: "POST"
   });
 }

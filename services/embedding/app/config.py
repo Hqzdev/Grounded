@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -13,9 +13,31 @@ class Settings(BaseSettings):
     minio_bucket: str = Field(default="grounded-documents")
     qdrant_url: str = Field(default="http://localhost:6333")
     qdrant_collection: str = Field(default="grounded_chunks")
+    embedding_provider: str = Field(default="local")
+    embedding_model: str = Field(default="local-hash-v1")
     embedding_dimensions: int = Field(default=64)
+    openai_api_key: str = Field(default="")
+    openai_base_url: str = Field(default="https://api.openai.com/v1")
+    ollama_base_url: str = Field(default="http://localhost:11434")
     chunk_size: int = Field(default=900)
     chunk_overlap: int = Field(default=120)
+
+    @model_validator(mode="after")
+    def validate_provider_config(self) -> "Settings":
+        supported_embedding = {"local", "openai", "ollama"}
+        if self.embedding_provider not in supported_embedding:
+            raise ValueError(f"Unsupported embedding provider: {self.embedding_provider}")
+        if self.embedding_provider == "openai" and not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
+        if self.embedding_dimensions <= 0:
+            raise ValueError("EMBEDDING_DIMENSIONS must be greater than zero")
+        if self.chunk_size <= 0:
+            raise ValueError("CHUNK_SIZE must be greater than zero")
+        if self.chunk_overlap < 0:
+            raise ValueError("CHUNK_OVERLAP must be zero or greater")
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
+        return self
 
 
 @lru_cache

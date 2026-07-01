@@ -7,12 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_session
-from app.embeddings import LocalEmbeddingProvider
+from app.answers import create_answer_provider
+from app.embeddings import create_embedding_provider
 from app.errors import RetrievalError
 from app.qdrant import QdrantSearch
 from app.repositories import RetrievalRepository
 from app.security import TokenService
-from app.services import AnswerComposer, RetrievalService
+from app.services import RetrievalService
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -41,6 +42,21 @@ async def current_claims(
 
 async def retrieval_service(session: Annotated[AsyncSession, Depends(get_session)]) -> RetrievalService:
     settings = get_settings()
-    embeddings = LocalEmbeddingProvider(settings.embedding_dimensions)
+    embeddings = create_embedding_provider(
+        settings.embedding_provider,
+        settings.embedding_model,
+        settings.embedding_dimensions,
+        settings.openai_api_key,
+        settings.openai_base_url,
+        settings.ollama_base_url,
+    )
     search = QdrantSearch(settings.qdrant_url, settings.qdrant_collection, settings.retrieval_limit)
-    return RetrievalService(RetrievalRepository(session), embeddings, search, AnswerComposer())
+    answers = create_answer_provider(
+        settings.answer_provider,
+        settings.answer_model,
+        settings.openai_api_key,
+        settings.openai_base_url,
+        settings.ollama_base_url,
+        settings.answer_temperature,
+    )
+    return RetrievalService(RetrievalRepository(session), embeddings, search, answers)

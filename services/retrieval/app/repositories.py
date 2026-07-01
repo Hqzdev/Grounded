@@ -53,7 +53,16 @@ class RetrievalRepository:
             return dict(row)
         return await self.create_session(tenant_id, user_id, title)
 
-    async def create_message(self, tenant_id: str, session_id: str, user_id: str | None, role: str, content: str) -> dict:
+    async def create_message(
+        self,
+        tenant_id: str,
+        session_id: str,
+        user_id: str | None,
+        role: str,
+        content: str,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> dict:
         result = await self.session.execute(
             text(
                 'INSERT INTO "Message" ("id", "tenantId", "sessionId", "userId", "role", "content", "provider", "model") '
@@ -67,8 +76,8 @@ class RetrievalRepository:
                 "user_id": user_id,
                 "role": role,
                 "content": content,
-                "provider": "local",
-                "model": "local-extractive-v1",
+                "provider": provider,
+                "model": model,
             },
         )
         return dict(result.mappings().one())
@@ -95,7 +104,7 @@ class RetrievalRepository:
         )
         return dict(result.mappings().one())
 
-    async def create_usage(self, tenant_id: str, user_id: str, message_id: str, input_tokens: int, output_tokens: int) -> None:
+    async def create_usage(self, tenant_id: str, user_id: str, message_id: str, provider: str, model: str, input_tokens: int, output_tokens: int) -> None:
         await self.session.execute(
             text(
                 'INSERT INTO "UsageLedger" ("id", "tenantId", "userId", "messageId", "eventType", "provider", "model", "inputTokens", "outputTokens", "totalTokens", "estimatedCost") '
@@ -107,8 +116,8 @@ class RetrievalRepository:
                 "user_id": user_id,
                 "message_id": message_id,
                 "event_type": "question_answered",
-                "provider": "local",
-                "model": "local-extractive-v1",
+                "provider": provider,
+                "model": model,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "total_tokens": input_tokens + output_tokens,

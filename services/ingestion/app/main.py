@@ -65,3 +65,12 @@ async def retry_job(
     service: Annotated[DocumentService, Depends(document_service)],
 ) -> IngestionJobSummary:
     return await service.retry_job(claims["tid"], document_id, job_id)
+
+
+@app.post("/documents/{document_id}/reindex")
+async def reindex_document(
+    document_id: str,
+    claims: Annotated[dict, Depends(current_claims)],
+    service: Annotated[DocumentService, Depends(document_service)],
+) -> IngestionJobSummary:
+    return await service.reindex_document(claims["tid"], document_id)

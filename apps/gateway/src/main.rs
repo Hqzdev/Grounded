@@ -82,7 +82,9 @@ async fn main() {
             "/api/documents/:document_id/jobs/:job_id/retry",
             post(retry_document_job),
         )
+        .route("/api/documents/:document_id/reindex", post(reindex_document))
         .route("/api/questions", post(answer_question))
+        .route("/api/providers/status", get(provider_status))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -192,6 +194,21 @@ async fn retry_document_job(
         &state.client,
         &state.services.ingestion,
         &format!("/documents/{document_id}/jobs/{job_id}/retry"),
+        Value::Null,
+        &headers,
+    )
+    .await
+}
+
+async fn reindex_document(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(document_id): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    proxy_json_with_headers(
+        &state.client,
+        &state.services.ingestion,
+        &format!("/documents/{document_id}/reindex"),
         Value::Null,
         &headers,
     )
@@ -343,6 +360,19 @@ async fn answer_question(
         &state.services.retrieval,
         "/questions",
         payload,
+        &headers,
+    )
+    .await
+}
+
+async fn provider_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, StatusCode> {
+    proxy_get(
+        &state.client,
+        &state.services.retrieval,
+        "/providers/status",
         &headers,
     )
     .await

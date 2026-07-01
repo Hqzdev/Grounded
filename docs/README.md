@@ -39,6 +39,7 @@ This register defines the controlled documentation set for Grounded. The documen
 
 | Document | Purpose | Status |
 | --- | --- | --- |
+| `case-study.md` | Product story, portfolio framing, demo script, and proof points. | Draft |
 | `system-requirements-specification.md` | System-level operational, security, capacity, and acceptance requirements. | Draft |
 | `software-requirements-specification.md` | Overall product and system requirements. | Draft |
 | `backend-architecture.md` | Backend architecture requirements and service boundaries. | Draft |
@@ -55,18 +56,19 @@ This register defines the controlled documentation set for Grounded. The documen
 
 ## 3. Reading Order
 
-1. Read the System Requirements Specification first.
-2. Read the Software Requirements Specification second.
-3. Read Backend Architecture to understand service ownership.
-4. Read Database before implementing persistence.
-5. Read API Contracts before connecting the frontend.
-6. Read Auth Security before changing authentication or private API access.
-7. Read Privacy and Cookies before changing consent, legal pages, or browser storage.
-8. Read CI/CD before changing GitHub Actions, release, or branch policy.
-9. Read Ingestion Pipeline and Retrieval Pipeline before implementing RAG flows.
-10. Read Tenant Isolation before writing tenant-scoped queries.
-11. Read Local Development before running the system.
-12. Read Development Workflow before opening a pull request.
+1. Read Case Study first for the product story and demo path.
+2. Read the System Requirements Specification second.
+3. Read the Software Requirements Specification third.
+4. Read Backend Architecture to understand service ownership.
+5. Read Database before implementing persistence.
+6. Read API Contracts before connecting the frontend.
+7. Read Auth Security before changing authentication or private API access.
+8. Read Privacy and Cookies before changing consent, legal pages, or browser storage.
+9. Read CI/CD before changing GitHub Actions, release, or branch policy.
+10. Read Ingestion Pipeline and Retrieval Pipeline before implementing RAG flows.
+11. Read Tenant Isolation before writing tenant-scoped queries.
+12. Read Local Development before running the system.
+13. Read Development Workflow before opening a pull request.
 
 ## 4. Documentation Standards
 

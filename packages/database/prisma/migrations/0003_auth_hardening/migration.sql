@@ -5,7 +5,7 @@ CREATE TABLE "AuthRateLimit" (
   "windowStart" TIMESTAMP(3) NOT NULL,
   "lockedUntil" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AuthRateLimit_pkey" PRIMARY KEY ("key")
 );
 

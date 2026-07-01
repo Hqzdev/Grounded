@@ -128,6 +128,20 @@ class DocumentRepository:
         row = result.mappings().first()
         return dict(row) if row else None
 
+    async def find_latest_version(self, tenant_id: str, document_id: str) -> dict | None:
+        result = await self.session.execute(
+            text(
+                'SELECT "id", "documentId", "tenantId", "version" '
+                'FROM "DocumentVersion" '
+                'WHERE "tenantId" = :tenant_id AND "documentId" = :document_id '
+                'ORDER BY "version" DESC '
+                'LIMIT 1'
+            ),
+            {"tenant_id": tenant_id, "document_id": document_id},
+        )
+        row = result.mappings().first()
+        return dict(row) if row else None
+
     async def soft_delete_document(self, tenant_id: str, document_id: str) -> dict | None:
         result = await self.session.execute(
             text(
@@ -142,6 +156,17 @@ class DocumentRepository:
         return dict(row) if row else None
 
     async def create_retry_job(self, tenant_id: str, document_id: str, document_version_id: str) -> dict:
+        await self.session.execute(
+            text(
+                'UPDATE "Document" '
+                'SET "status" = CAST(:document_status AS "DocumentStatus"), "updatedAt" = now() '
+                'WHERE "tenantId" = :tenant_id AND "id" = :document_id AND "deletedAt" IS NULL'
+            ),
+            {"tenant_id": tenant_id, "document_id": document_id, "document_status": "queued"},
+        )
+        return await self.create_job(tenant_id, document_id, document_version_id)
+
+    async def create_reindex_job(self, tenant_id: str, document_id: str, document_version_id: str) -> dict:
         await self.session.execute(
             text(
                 'UPDATE "Document" '

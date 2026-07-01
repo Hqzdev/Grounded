@@ -26,3 +26,17 @@ class AnswerResponse(BaseModel):
     answer: str
     citations: list[CitationResponse]
     created_at: datetime
+
+
+class ProviderConfigResponse(BaseModel):
+    provider: str
+    model: str
+    ready: bool
+    status: str
+
+
+class ProviderStatusResponse(BaseModel):
+    embedding: ProviderConfigResponse
+    answer: ProviderConfigResponse
+    retrieval_limit: int
+    qdrant_collection: str

@@ -69,13 +69,19 @@ services:
       dockerfile: infra/docker/python-worker.Dockerfile
       args:
         SERVICE_PATH: services/embedding
+    restart: on-failure
     environment:
       DATABASE_URL: postgresql://grounded:grounded@postgres:5432/grounded
       QUEUE_URL: amqp://guest:guest@rabbitmq:5672
       INGESTION_QUEUE: document_ingestion
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: grounded_chunks
-      EMBEDDING_DIMENSIONS: 64
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-local-hash-v1}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-64}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: grounded
       MINIO_ROOT_PASSWORD: groundedsecret
@@ -98,7 +104,15 @@ services:
       JWT_AUDIENCE: grounded-web
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: grounded_chunks
-      EMBEDDING_DIMENSIONS: 64
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-local}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-local-hash-v1}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-64}
+      ANSWER_PROVIDER: ${ANSWER_PROVIDER:-local}
+      ANSWER_MODEL: ${ANSWER_MODEL:-local-extractive-v1}
+      ANSWER_TEMPERATURE: ${ANSWER_TEMPERATURE:-0.1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       RETRIEVAL_LIMIT: 5
       REDIS_URL: redis://redis:6379
     ports:

@@ -71,8 +71,22 @@ print(value)
 PY
 }
 
+wait_for_gateway() {
+  for _ in $(seq 1 60); do
+    if curl -fsS "$GATEWAY_URL/api/health" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 2
+  done
+
+  echo "Gateway did not become healthy at $GATEWAY_URL" >&2
+  exit 1
+}
+
 need curl
 need python3
+
+wait_for_gateway
 
 request GET /api/health
 expect_success
@@ -119,6 +133,16 @@ request POST /api/auth/login "$LOGIN_BODY"
 expect_success
 ACCESS_TOKEN="$(json_value access_token)"
 
+request GET /api/providers/status
+expect_success
+PROVIDER_STATUS="$(json_value embedding.status)"
+
+if [ "$PROVIDER_STATUS" != "configured" ]; then
+  echo "Expected embedding provider to be configured" >&2
+  echo "$RESPONSE_BODY" >&2
+  exit 1
+fi
+
 DOCUMENT_BODY="$(python3 - <<'PY'
 import json
 print(json.dumps({
@@ -152,6 +176,32 @@ done
 
 if [ "$DOCUMENT_STATUS" != "indexed" ]; then
   echo "Document did not become indexed in time" >&2
+  request GET "/api/documents/$DOCUMENT_ID/jobs"
+  echo "$RESPONSE_BODY" >&2
+  exit 1
+fi
+
+request POST "/api/documents/$DOCUMENT_ID/reindex"
+expect_success
+
+for _ in $(seq 1 30); do
+  request GET "/api/documents/$DOCUMENT_ID"
+  expect_success
+  DOCUMENT_STATUS="$(json_value status)"
+  if [ "$DOCUMENT_STATUS" = "indexed" ]; then
+    break
+  fi
+  if [ "$DOCUMENT_STATUS" = "failed" ]; then
+    echo "Document re-indexing failed" >&2
+    request GET "/api/documents/$DOCUMENT_ID/jobs"
+    echo "$RESPONSE_BODY" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+if [ "$DOCUMENT_STATUS" != "indexed" ]; then
+  echo "Document did not re-index in time" >&2
   request GET "/api/documents/$DOCUMENT_ID/jobs"
   echo "$RESPONSE_BODY" >&2
   exit 1

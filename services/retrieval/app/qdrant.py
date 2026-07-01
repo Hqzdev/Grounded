@@ -37,6 +37,9 @@ class QdrantSearch:
                 },
             },
         )
+        if response.status_code == 404:
+            return []
+
         response.raise_for_status()
         payload = response.json()
         return [

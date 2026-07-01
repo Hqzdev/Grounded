@@ -103,6 +103,27 @@ class DocumentService:
 
         return self.job_summary(retry)
 
+    async def reindex_document(self, tenant_id: str, document_id: str) -> IngestionJobSummary:
+        document = await self.repository.find_document(tenant_id, document_id)
+        if not document:
+            raise IngestionError.document_not_found()
+
+        version = await self.repository.find_latest_version(tenant_id, document_id)
+        if not version:
+            raise IngestionError.document_not_found()
+
+        job = await self.repository.create_reindex_job(tenant_id, document_id, version["id"])
+        await self.repository.commit()
+
+        try:
+            await self.queue.publish_job(job["id"])
+        except Exception as exc:
+            await self.repository.mark_publish_failed(tenant_id, document_id, job["id"], str(exc))
+            await self.repository.commit()
+            raise
+
+        return self.job_summary(job)
+
     def document_summary(self, document: dict) -> DocumentSummary:
         return DocumentSummary(
             id=document["id"],

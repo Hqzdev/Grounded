@@ -51,7 +51,7 @@ Question
   -> Qdrant Search
   -> PostgreSQL Chunk Lookup
   -> Context Assembly
-  -> LLM Generation
+  -> Answer Provider
   -> Citation Persistence
   -> Usage Ledger
 ```
@@ -68,6 +68,7 @@ Question
 | RPR-006 | The retrieval service shall return an answer and citations. | High |
 | RPR-007 | The retrieval service shall persist messages and citations. | Medium |
 | RPR-008 | The retrieval service shall record provider usage. | Medium |
+| RPR-009 | The retrieval service shall select embedding and answer providers from runtime configuration. | Medium |
 
 ## 5. Citation Requirements
 
@@ -76,6 +77,20 @@ Each citation shall include document identifier, document title, page or span me
 ## 6. Usage Requirements
 
 Usage records shall include tenant, provider, model, input tokens, output tokens, total tokens, estimated cost, and event type.
+
+Default local development uses `EMBEDDING_PROVIDER=local`, `EMBEDDING_MODEL=local-hash-v1`, `ANSWER_PROVIDER=local`, and `ANSWER_MODEL=local-extractive-v1`. External providers must preserve tenant filtering, citation persistence, and usage ledger recording.
+
+Supported provider modes:
+
+| Mode | Variables |
+| --- | --- |
+| Local deterministic MVP | `EMBEDDING_PROVIDER=local`, `ANSWER_PROVIDER=local` |
+| OpenAI hosted quality | `EMBEDDING_PROVIDER=openai`, `ANSWER_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` |
+| Ollama local models | `EMBEDDING_PROVIDER=ollama`, `ANSWER_PROVIDER=ollama`, `OLLAMA_BASE_URL` |
+
+Embedding model output dimensions must match `EMBEDDING_DIMENSIONS` and the Qdrant collection dimensions. Changing embedding provider or dimensions requires re-indexing documents into a compatible collection.
+
+OpenAI mode defaults to `text-embedding-3-small` and `gpt-4o-mini` when the local model names are left unchanged. Ollama mode defaults to `nomic-embed-text` and `llama3.2` when the local model names are left unchanged; operators must pull those models before using the mode.
 
 ## 7. Acceptance Criteria
 
@@ -86,6 +101,7 @@ Usage records shall include tenant, provider, model, input tokens, output tokens
 | RAC-003 | Assistant messages and citations are persisted together. |
 | RAC-004 | Usage ledger records are created for answer generation. |
 | RAC-005 | Tenant context is read from the bearer token, not the request body. |
+| RAC-006 | Provider and model values are not hardcoded in repository writes. |
 
 ## 8. References
 

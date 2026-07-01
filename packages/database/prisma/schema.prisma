@@ -60,6 +60,7 @@ enum ProviderType {
   openai
   voyage
   local
+  ollama
   mock
 }
 
@@ -215,7 +216,7 @@ model AuthRateLimit {
   windowStart DateTime
   lockedUntil DateTime?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   @@index([action, lockedUntil])
   @@index([updatedAt])

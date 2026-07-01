@@ -20,7 +20,7 @@
     "db:studio": "npm --workspace packages/database run db:studio",
     "db:validate": "npm --workspace packages/database run db:validate",
     "dev": "bash scripts/dev.sh",
-    "dev:backend": "docker compose -f infra/docker/docker-compose.yml up --build -d postgres redis qdrant rabbitmq minio auth ingestion embedding retrieval gateway",
+    "dev:backend": "docker compose -f infra/docker/docker-compose.yml up --build -d postgres redis qdrant rabbitmq minio auth ingestion embedding retrieval gateway && bash scripts/wait-for-postgres.sh",
     "dev:backend:down": "docker compose -f infra/docker/docker-compose.yml down",
     "dev:web": "npm --workspace apps/web run dev",
     "lint:web": "npm --workspace apps/web run lint",
