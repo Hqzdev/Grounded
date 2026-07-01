@@ -76,8 +76,12 @@ async fn main() {
         .route("/api/tenants", post(create_tenant))
         .route("/api/tenants/current", get(current_tenant))
         .route("/api/documents", get(list_documents).post(create_document))
-        .route("/api/documents/:document_id", get(get_document))
+        .route("/api/documents/:document_id", get(get_document).delete(delete_document))
         .route("/api/documents/:document_id/jobs", get(list_document_jobs))
+        .route(
+            "/api/documents/:document_id/jobs/:job_id/retry",
+            post(retry_document_job),
+        )
         .route("/api/questions", post(answer_question))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -151,6 +155,20 @@ async fn get_document(
     .await
 }
 
+async fn delete_document(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(document_id): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    proxy_delete(
+        &state.client,
+        &state.services.ingestion,
+        &format!("/documents/{document_id}"),
+        &headers,
+    )
+    .await
+}
+
 async fn list_document_jobs(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -160,6 +178,21 @@ async fn list_document_jobs(
         &state.client,
         &state.services.ingestion,
         &format!("/documents/{document_id}/jobs"),
+        &headers,
+    )
+    .await
+}
+
+async fn retry_document_job(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((document_id, job_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    proxy_json_with_headers(
+        &state.client,
+        &state.services.ingestion,
+        &format!("/documents/{document_id}/jobs/{job_id}/retry"),
+        Value::Null,
         &headers,
     )
     .await

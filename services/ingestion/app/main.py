@@ -46,3 +46,22 @@ async def list_jobs(
     service: Annotated[DocumentService, Depends(document_service)],
 ) -> list[IngestionJobSummary]:
     return await service.list_jobs(claims["tid"], document_id)
+
+
+@app.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    claims: Annotated[dict, Depends(current_claims)],
+    service: Annotated[DocumentService, Depends(document_service)],
+) -> DocumentSummary:
+    return await service.delete_document(claims["tid"], document_id)
+
+
+@app.post("/documents/{document_id}/jobs/{job_id}/retry")
+async def retry_job(
+    document_id: str,
+    job_id: str,
+    claims: Annotated[dict, Depends(current_claims)],
+    service: Annotated[DocumentService, Depends(document_service)],
+) -> IngestionJobSummary:
+    return await service.retry_job(claims["tid"], document_id, job_id)

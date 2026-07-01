@@ -27,6 +27,10 @@ export function resolveErrorMessage(payload: unknown, status: number) {
       return payload.detail;
     }
 
+    if (isMessagePayload(payload.detail)) {
+      return payload.detail.message;
+    }
+
     if (Array.isArray(payload.detail)) {
       const message = payload.detail
         .map((item) => resolveValidationMessage(item))
@@ -48,6 +52,13 @@ export function resolveErrorMessage(payload: unknown, status: number) {
 
 function isErrorPayload(payload: unknown): payload is { detail?: unknown; message?: unknown } {
   return typeof payload === "object" && payload !== null;
+}
+
+function isMessagePayload(payload: unknown): payload is { message: string } {
+  return typeof payload === "object"
+    && payload !== null
+    && "message" in payload
+    && typeof (payload as { message?: unknown }).message === "string";
 }
 
 function resolveValidationMessage(item: unknown) {

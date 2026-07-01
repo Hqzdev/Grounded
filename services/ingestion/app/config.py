@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     minio_bucket: str = Field(default="grounded-documents")
     queue_url: str = Field(default="amqp://guest:guest@localhost:5672")
     ingestion_queue: str = Field(default="document_ingestion")
+    max_document_bytes: int = Field(default=1_000_000)
 
 
 @lru_cache

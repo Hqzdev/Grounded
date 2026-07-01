@@ -18,7 +18,7 @@ class RetrievalRepository:
                 'SELECT c."id", c."tenantId", c."documentId", c."content", c."sourceStart", c."sourceEnd", d."title" AS "documentTitle" '
                 'FROM "DocumentChunk" c '
                 'JOIN "Document" d ON d."id" = c."documentId" '
-                'WHERE c."tenantId" = :tenant_id AND c."id" = ANY(:chunk_ids)'
+                'WHERE c."tenantId" = :tenant_id AND c."id" = ANY(:chunk_ids) AND d."deletedAt" IS NULL'
             ),
             {"tenant_id": tenant_id, "chunk_ids": chunk_ids},
         )

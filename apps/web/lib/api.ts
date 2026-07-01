@@ -144,6 +144,18 @@ export async function queueDocument(payload: DocumentRequest) {
   });
 }
 
+export async function deleteDocument(documentId: string) {
+  return request<DocumentSummary>(`/api/web/documents/${documentId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function retryIngestionJob(documentId: string, jobId: string) {
+  return request(`/api/web/documents/${documentId}/jobs/${jobId}/retry`, {
+    method: "POST"
+  });
+}
+
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
   const response = await fetch(path, {
     method: options.method,
