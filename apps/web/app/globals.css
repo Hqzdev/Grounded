@@ -147,6 +147,22 @@ button {
   border-color: var(--ink);
 }
 
+.btn-small {
+  border-radius: 8px;
+  font-size: 12px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.btn-ghost.danger {
+  color: #9b2c0f;
+}
+
+.btn-ghost.danger:hover {
+  border-color: #ff9b7a;
+  color: #7c210b;
+}
+
 .nav {
   background: rgba(243, 241, 231, 0.84);
   backdrop-filter: blur(14px);
@@ -1049,7 +1065,7 @@ button {
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 12px;
-  grid-template-columns: 1.4fr 0.8fr 0.8fr 0.8fr;
+  grid-template-columns: minmax(0, 1.4fr) 0.8fr 0.8fr 0.5fr auto;
   padding: 14px 16px;
   transition: background 160ms ease;
 }
@@ -1060,6 +1076,22 @@ button {
 
 .doc-row:last-child {
   border-bottom: 0;
+}
+
+.doc-row strong,
+.doc-row span {
+  min-width: 0;
+}
+
+.doc-row strong {
+  overflow-wrap: anywhere;
+}
+
+.doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .status-badge {

@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Logo } from "@/components/Chrome";
-import { ApiError, AnswerResponse, DocumentSummary, TenantSummary, UserSummary, askQuestion, getMe, listDocuments, logout, queueDocument } from "@/lib/api";
+import { ApiError, AnswerResponse, DocumentSummary, TenantSummary, UserSummary, askQuestion, deleteDocument, getMe, listDocumentJobs, listDocuments, logout, queueDocument, retryIngestionJob } from "@/lib/api";
 
 const navItems = ["Chat", "Documents", "Usage", "Settings"];
 
 type WorkspaceStatus = {
   tone: "success" | "error";
   message: string;
+};
+
+type DocumentAction = {
+  documentId: string;
+  type: "delete" | "retry";
 };
 
 export function Workspace() {
@@ -24,6 +29,7 @@ export function Workspace() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
+  const [documentAction, setDocumentAction] = useState<DocumentAction | null>(null);
 
   const usageMetrics = useMemo(
     () => [
@@ -126,6 +132,47 @@ export function Workspace() {
       setStatus({ tone: "error", message: resolveWorkspaceError(error) });
     } finally {
       setIsAsking(false);
+    }
+  }
+
+  async function handleDeleteDocument(document: DocumentSummary) {
+    if (!confirm(`Delete "${document.title}" from this workspace?`)) {
+      return;
+    }
+
+    setStatus(null);
+    setDocumentAction({ documentId: document.id, type: "delete" });
+
+    try {
+      await deleteDocument(document.id);
+      setDocuments((currentDocuments) => currentDocuments.filter((item) => item.id !== document.id));
+      setStatus({ tone: "success", message: "Document deleted." });
+    } catch (error) {
+      setStatus({ tone: "error", message: resolveWorkspaceError(error) });
+    } finally {
+      setDocumentAction(null);
+    }
+  }
+
+  async function handleRetryDocument(document: DocumentSummary) {
+    setStatus(null);
+    setDocumentAction({ documentId: document.id, type: "retry" });
+
+    try {
+      const jobs = await listDocumentJobs(document.id);
+      const failedJob = jobs.find((job) => job.status === "failed");
+
+      if (!failedJob) {
+        throw new Error("No failed ingestion job found for this document.");
+      }
+
+      await retryIngestionJob(document.id, failedJob.id);
+      setDocuments(await listDocuments());
+      setStatus({ tone: "success", message: "Ingestion retry queued." });
+    } catch (error) {
+      setStatus({ tone: "error", message: resolveWorkspaceError(error) });
+    } finally {
+      setDocumentAction(null);
     }
   }
 
@@ -233,6 +280,16 @@ export function Workspace() {
                 <span>{document.content_type}</span>
                 <span className={`status-badge ${document.status}`}>{document.status}</span>
                 <span className="mono">v{document.current_version}</span>
+                <div className="doc-actions">
+                  {document.status === "failed" ? (
+                    <button className="btn btn-ghost btn-small" disabled={isDocumentActionActive(documentAction, document.id)} onClick={() => void handleRetryDocument(document)} type="button">
+                      {isDocumentAction(documentAction, document.id, "retry") ? "Retrying..." : "Retry"}
+                    </button>
+                  ) : null}
+                  <button className="btn btn-ghost btn-small danger" disabled={isDocumentActionActive(documentAction, document.id)} onClick={() => void handleDeleteDocument(document)} type="button">
+                    {isDocumentAction(documentAction, document.id, "delete") ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
               </div>
             )) : (
               <div className="doc-row">
@@ -255,6 +312,14 @@ export function Workspace() {
       </section>
     </main>
   );
+}
+
+function isDocumentAction(action: DocumentAction | null, documentId: string, type: DocumentAction["type"]) {
+  return action?.documentId === documentId && action.type === type;
+}
+
+function isDocumentActionActive(action: DocumentAction | null, documentId: string) {
+  return action?.documentId === documentId;
 }
 
 function getFormValue(form: FormData, key: string) {
