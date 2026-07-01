@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Logo } from "@/components/Chrome";
-import { ApiError, AnswerResponse, DocumentSummary, TenantSummary, UserSummary, askQuestion, deleteDocument, getMe, listDocumentJobs, listDocuments, logout, queueDocument, retryIngestionJob } from "@/lib/api";
+import { ApiError, AnswerResponse, DocumentSummary, IngestionJobSummary, TenantSummary, UserSummary, askQuestion, deleteDocument, getMe, listDocumentJobs, listDocuments, logout, queueDocument, retryIngestionJob } from "@/lib/api";
 
 const navItems = ["Chat", "Documents", "Usage", "Settings"];
 
@@ -30,6 +30,15 @@ export function Workspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [documentAction, setDocumentAction] = useState<DocumentAction | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [selectedDocumentJobs, setSelectedDocumentJobs] = useState<IngestionJobSummary[]>([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [jobHistoryError, setJobHistoryError] = useState<string | null>(null);
+
+  const selectedDocument = useMemo(
+    () => documents.find((document) => document.id === selectedDocumentId) ?? null,
+    [documents, selectedDocumentId]
+  );
 
   const usageMetrics = useMemo(
     () => [
@@ -102,7 +111,8 @@ export function Workspace() {
           content
         }
       );
-      setDocuments(await listDocuments());
+      const nextDocuments = await listDocuments();
+      setDocuments(nextDocuments);
       setStatus({ tone: "success", message: "Document queued for indexing." });
       event.currentTarget.reset();
     } catch (error) {
@@ -146,6 +156,11 @@ export function Workspace() {
     try {
       await deleteDocument(document.id);
       setDocuments((currentDocuments) => currentDocuments.filter((item) => item.id !== document.id));
+      if (selectedDocumentId === document.id) {
+        setSelectedDocumentId(null);
+        setSelectedDocumentJobs([]);
+        setJobHistoryError(null);
+      }
       setStatus({ tone: "success", message: "Document deleted." });
     } catch (error) {
       setStatus({ tone: "error", message: resolveWorkspaceError(error) });
@@ -168,11 +183,29 @@ export function Workspace() {
 
       await retryIngestionJob(document.id, failedJob.id);
       setDocuments(await listDocuments());
+      if (selectedDocumentId === document.id) {
+        setSelectedDocumentJobs(await listDocumentJobs(document.id));
+      }
       setStatus({ tone: "success", message: "Ingestion retry queued." });
     } catch (error) {
       setStatus({ tone: "error", message: resolveWorkspaceError(error) });
     } finally {
       setDocumentAction(null);
+    }
+  }
+
+  async function handleSelectDocument(document: DocumentSummary) {
+    setSelectedDocumentId(document.id);
+    setSelectedDocumentJobs([]);
+    setJobHistoryError(null);
+    setIsLoadingJobs(true);
+
+    try {
+      setSelectedDocumentJobs(await listDocumentJobs(document.id));
+    } catch (error) {
+      setJobHistoryError(resolveWorkspaceError(error));
+    } finally {
+      setIsLoadingJobs(false);
     }
   }
 
@@ -275,12 +308,15 @@ export function Workspace() {
           <p className="eyebrow">Documents</p>
           <div className="doc-table">
             {documents.length > 0 ? documents.map((document) => (
-              <div className="doc-row" key={document.id}>
+              <div className={`doc-row ${selectedDocumentId === document.id ? "selected" : ""}`} key={document.id}>
                 <strong>{document.title}</strong>
                 <span>{document.content_type}</span>
                 <span className={`status-badge ${document.status}`}>{document.status}</span>
                 <span className="mono">v{document.current_version}</span>
                 <div className="doc-actions">
+                  <button className="btn btn-ghost btn-small" disabled={isLoadingJobs} onClick={() => void handleSelectDocument(document)} type="button">
+                    {isLoadingJobs && selectedDocumentId === document.id ? "Loading..." : "Details"}
+                  </button>
                   {document.status === "failed" ? (
                     <button className="btn btn-ghost btn-small" disabled={isDocumentActionActive(documentAction, document.id)} onClick={() => void handleRetryDocument(document)} type="button">
                       {isDocumentAction(documentAction, document.id, "retry") ? "Retrying..." : "Retry"}
@@ -298,6 +334,39 @@ export function Workspace() {
               </div>
             )}
           </div>
+          {selectedDocument ? (
+            <div className="document-detail">
+              <div className="document-detail-head">
+                <div>
+                  <p className="eyebrow">Job history</p>
+                  <h3>{selectedDocument.title}</h3>
+                </div>
+                <span className={`status-badge ${selectedDocument.status}`}>{selectedDocument.status}</span>
+              </div>
+              {jobHistoryError ? (
+                <div className="auth-message error" role="alert">{jobHistoryError}</div>
+              ) : null}
+              {isLoadingJobs ? (
+                <div className="job-empty">Loading ingestion jobs...</div>
+              ) : selectedDocumentJobs.length > 0 ? (
+                <div className="job-list">
+                  {selectedDocumentJobs.map((job) => (
+                    <div className="job-row" key={job.id}>
+                      <div>
+                        <span className={`status-badge ${job.status}`}>{job.status}</span>
+                        <strong className="mono">{job.id}</strong>
+                      </div>
+                      <span>attempts {job.attempts}</span>
+                      <span>{formatDate(job.finished_at ?? job.started_at ?? job.queued_at)}</span>
+                      {job.error_message ? <p>{job.error_code ? `${job.error_code}: ` : ""}{job.error_message}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="job-empty">No ingestion jobs found for this document.</div>
+              )}
+            </div>
+          ) : null}
         </section>
         <section className="stats-grid" id="usage">
           {usageMetrics.map((metric) => (
@@ -334,6 +403,13 @@ function getFormValue(form: FormData, key: string) {
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "document";
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 function resolveWorkspaceError(error: unknown) {
