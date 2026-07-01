@@ -1074,6 +1074,11 @@ button {
   background: #f5f9ef;
 }
 
+.doc-row.selected {
+  background: #eff6ec;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .doc-row:last-child {
   border-bottom: 0;
 }
@@ -1092,6 +1097,81 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.document-detail {
+  background: #f7f8f0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.document-detail-head {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.document-detail-head h3 {
+  font-size: 20px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.job-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.job-row {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.5fr) auto auto;
+  padding: 12px;
+}
+
+.job-row div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.job-row strong {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.job-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.job-row p {
+  color: #9b2c0f;
+  font-size: 12px;
+  grid-column: 1 / -1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.job-empty {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 16px;
+  padding: 14px;
 }
 
 .status-badge {
@@ -1114,9 +1194,35 @@ button {
   color: #8a5b00;
 }
 
+.status-badge.uploaded {
+  background: #f0eee4;
+  color: #5a655e;
+}
+
 .status-badge.failed {
   background: #ffe1d8;
   color: #b43218;
+}
+
+.status-badge.queued {
+  background: #eaf0ff;
+  color: #3159bb;
+}
+
+.status-badge.running {
+  background: #fff2ce;
+  color: #8a5b00;
+}
+
+.status-badge.completed {
+  background: #e0f7e7;
+  color: #0b7d52;
+}
+
+.status-badge.cancelled,
+.status-badge.deleted {
+  background: #f0eee4;
+  color: #5a655e;
 }
 
 .cursor-layer {
@@ -1267,6 +1373,14 @@ button {
   }
 
   .doc-row {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-actions {
+    justify-content: flex-start;
+  }
+
+  .job-row {
     grid-template-columns: 1fr;
   }
 
