@@ -72,6 +72,20 @@ export type DocumentSummary = {
   updated_at: string;
 };
 
+export type IngestionJobSummary = {
+  id: string;
+  tenant_id: string;
+  document_id: string;
+  document_version_id: string;
+  status: string;
+  attempts: number;
+  error_code: string | null;
+  error_message: string | null;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
 export type CitationResponse = {
   document_id: string;
   document_title: string;
@@ -126,6 +140,12 @@ export async function getMe() {
 
 export async function listDocuments() {
   return request<DocumentSummary[]>("/api/web/documents", {
+    method: "GET"
+  });
+}
+
+export async function listDocumentJobs(documentId: string) {
+  return request<IngestionJobSummary[]>(`/api/web/documents/${documentId}/jobs`, {
     method: "GET"
   });
 }
