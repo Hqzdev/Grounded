@@ -24,6 +24,7 @@
     "dev:backend:down": "docker compose -f infra/docker/docker-compose.yml down",
     "dev:web": "npm --workspace apps/web run dev",
     "lint:web": "npm --workspace apps/web run lint",
-    "smoke:backend": "bash scripts/smoke-ingestion-retrieval.sh"
+    "smoke:backend": "bash scripts/smoke-ingestion-retrieval.sh",
+    "test:security": "node scripts/security-tenant-isolation.mjs"
   }
 }
